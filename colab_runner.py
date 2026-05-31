@@ -144,6 +144,29 @@ def run_colab_pipeline(config_dict: dict) -> list:
         core.ytdlp_path = "yt_dlp_module"
     else:
         core.ytdlp_path = "yt-dlp"
+    
+    # 5. Create empty cookies.txt if missing to satisfy AutoClipperCore's mandatory checks
+    app_dir = Path("/content/yt-short-clipper")
+    app_dir.mkdir(parents=True, exist_ok=True)
+    cookies_paths = [
+        Path("cookies.txt"),
+        app_dir / "cookies.txt"
+    ]
+    has_valid_cookies = False
+    for path in cookies_paths:
+        if path.exists() and path.stat().st_size > 50:
+            has_valid_cookies = True
+            break
+            
+    if not has_valid_cookies:
+        print("🍪 [Cookies Safeguard] No valid cookies.txt found. Creating a blank Netscape cookie file to bypass the desktop app's mandatory requirement for public video downloads...")
+        for path in cookies_paths:
+            try:
+                path.parent.mkdir(parents=True, exist_ok=True)
+                with open(path, "w", encoding="utf-8") as f:
+                    f.write("# Netscape HTTP Cookie File\n")
+            except Exception as e:
+                print(f"  Warning: Failed to create cookies.txt at {path}: {e}")
 
     # Step 1: Download Video & Subtitles
     print("\n🎬 [STEP 1] Downloading YouTube Video...")
