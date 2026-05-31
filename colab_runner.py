@@ -20,6 +20,60 @@ if sys.platform == "win32":
     SUBPROCESS_FLAGS = subprocess.CREATE_NO_WINDOW
 
 
+def local_whisper_transcribe(self, audio_path: str):
+    print("🤖 [Local Whisper] Transcribing audio locally on GPU/CPU...")
+    import whisper
+    from types import SimpleNamespace
+    
+    # Load model (lazy load and cache it)
+    if not hasattr(self, "_local_whisper_model") or self._local_whisper_model is None:
+        print("🤖 [Local Whisper] Loading Whisper model (base)...")
+        # In Colab, "base" or "small" model is perfect and very fast
+        self._local_whisper_model = whisper.load_model("base")
+        
+    result = self._local_whisper_model.transcribe(audio_path, word_timestamps=True)
+    
+    words = []
+    segments = []
+    
+    for segment in result.get("segments", []):
+        segments.append({
+            "start": segment.get("start", 0),
+            "end": segment.get("end", 0),
+            "text": segment.get("text", "")
+        })
+        for w in segment.get("words", []):
+            words.append(SimpleNamespace(
+                word=w.get("word", ""),
+                start=w.get("start", 0),
+                end=w.get("end", 0)
+            ))
+            
+    print(f"🤖 [Local Whisper] Transcription complete! Exposing {len(words)} words, {len(segments)} segments.")
+    return SimpleNamespace(words=words, segments=segments)
+
+
+def local_whisper_transcribe_file(self, audio_path: str, time_offset: float = 0) -> list:
+    print("🤖 [Local Whisper] Transcribing full audio segment locally...")
+    import whisper
+    
+    if not hasattr(self, "_local_whisper_model") or self._local_whisper_model is None:
+        print("🤖 [Local Whisper] Loading Whisper model (base)...")
+        self._local_whisper_model = whisper.load_model("base")
+        
+    result = self._local_whisper_model.transcribe(audio_path)
+    
+    segments = []
+    for segment in result.get("segments", []):
+        segments.append({
+            "start": segment.get("start", 0) + time_offset,
+            "end": segment.get("end", 0) + time_offset,
+            "text": segment.get("text", "")
+        })
+    print(f"🤖 [Local Whisper] Segment transcription complete! Got {len(segments)} segments.")
+    return segments
+
+
 def run_colab_pipeline(config_dict: dict) -> list:
     """Executes the video processing pipeline headlessly in Google Colab"""
     print("🚀 Initializing YT-Short-Clipper Colab Pipeline...")
@@ -71,8 +125,15 @@ def run_colab_pipeline(config_dict: dict) -> list:
     if core.model == "auto" and provider == "openrouter":
         core.model = "openrouter/free"
         
-    core.caption_client = caption_client
-    core.whisper_model = colab_config.config.get("whisper_model", "whisper-1")
+    # Check if local Whisper should be monkey-patched
+    if whisper_provider == "local":
+        print("🤖 [Local Whisper] Free local transcription selected. Monkey-patching Whisper Core...")
+        import types as py_types
+        core._whisper_transcribe_words_api = py_types.MethodType(local_whisper_transcribe, core)
+        core._whisper_transcribe_file = py_types.MethodType(local_whisper_transcribe_file, core)
+    else:
+        core.caption_client = caption_client
+        core.whisper_model = colab_config.config.get("whisper_model", "whisper-1")
     
     core.tts_client = primary_client
     core.tts_model = "tts-1"

@@ -35,7 +35,7 @@ class ColabConfig:
             "provider": "openrouter",
             "api_key": "",
             "model": "auto",
-            "whisper_provider": "openai",
+            "whisper_provider": "local",
             "whisper_api_key": "",
             "whisper_model": "whisper-1",
             "num_clips": 5,
